@@ -8,20 +8,25 @@ import json
 import logging
 
 # Get an instance of a logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('betterdjango.frameworks.api')
 
 class APIProvider:
-    API_REGISTRY = {}
 
     def __init__(self):
-        self.URLS = []
-        self.APIS = []
+        self.REGISTERED_APIS = {}
 
     @property
     def urls(self):
         apiurls = []
-        for pattern, method in self.URLS:
-            apiurls.append(url(pattern, method))
+        for version in self.REGISTERED_APIS:
+            for namespace in self.REGISTERED_APIS[version]:
+                for api_name in self.REGISTERED_APIS[version][namespace]:
+                    aurl = '^v' + version + '/' + namespace + '.' + api_name + '/$'
+                    aurl = aurl.replace('.', '[.]')
+                    apiurls.append(url(
+                            aurl,
+                            self.REGISTERED_APIS[version][namespace][api_name]
+                        ))
 
         urlpatterns = patterns('', *apiurls)
         return urlpatterns, 'api', 'api'
@@ -30,18 +35,16 @@ class APIProvider:
         for app in settings.INSTALLED_APPS:
             try:
                 __import__(app, globals(), locals(), ['api'], 0)
-                logging.info('API(s) found for { %s }' % app)
+                logger.info('API(s) found for {%s}' % app)
             except Exception as e:
                 logger.debug(str(e))
 
-    def register(self, *http_methods):
+    def register(self, version, namespace, api_name, http_methods):
         def _inner1(method):
-            method_name = method.__name__
-            method_app = '.'.join(method.__module__.split('.')[:-1])
-            method_url = r'^%s/%s/$' % (method_app,
-                method_name.replace('_', '-'))
-            self.APIS.append((method_app, method_name.replace('_', '-'),
-                method_url, http_methods[0]))
+            if self.REGISTERED_APIS.get(version) is None:
+                self.REGISTERED_APIS[version] = {}
+            if self.REGISTERED_APIS[version].get(namespace) is None:
+                self.REGISTERED_APIS[version][namespace] = {}
 
             def _inner2(request):
                 # Check for allowed methods
@@ -109,7 +112,7 @@ class APIProvider:
                     default=default_provider(request), sort_keys=True),
                     content_type='application/json')
 
-            self.URLS.append((method_url, _inner2))
+            self.REGISTERED_APIS[version][namespace][api_name] = _inner2
             return _inner2
         return _inner1
 
