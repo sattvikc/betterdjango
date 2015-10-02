@@ -25,6 +25,8 @@ class CRUDHelper:
                 self._fks[f] = mf
 
     def set_property(self, inst, field, value):
+        if value == '__null__':
+            value = None
         if field in self._fks:
             fkf = self.fk_field_map.get(field, self.fk_field_map.get('_default', 'pk'))
             value = self._fks[field].related_model.objects.get(**{fkf: value})
