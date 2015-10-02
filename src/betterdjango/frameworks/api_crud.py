@@ -6,21 +6,42 @@ class CRUDHelper:
             model=None,
             fields=None,
             pk_field='pk',
+            fk_field_map={'_default': 'pk'},
             filter_callback=None,
             add_callback=None
         ):
         self.model = model
         self.fields = fields
         self.pk_field = pk_field
+        self.fk_field_map = fk_field_map
         self.filter_callback = filter_callback
         self.add_callback = add_callback
+        self._fks = {}
+
+        # Read the field properties
+        for f in self.fields:
+            mf = self.model._meta.get_field(f)
+            if mf.__class__.__name__ == 'ForeignKey':
+                self._fks[f] = mf
+
+    def set_property(self, inst, field, value):
+        if field in self._fks:
+            fkf = self.fk_field_map.get(field, self.fk_field_map.get('_default', 'pk'))
+            value = self._fks[field].related_model.objects.get(**{fkf: value})
+            setattr(inst, field, value)
+        else:
+            setattr(inst, field, value)
 
     def add(self, request, **kwargs):
         nkwargs = {}
         for f in self.fields:
             if f in kwargs:
                 nkwargs[f] = kwargs[f]
-        inst = self.model(**nkwargs)
+        inst = self.model()
+        
+        for f in nkwargs:
+            self.set_property(inst, f, nkwargs[f])
+
         if not self.add_callback is None:
             self.add_callback(request, inst)
         inst.save()
@@ -36,7 +57,7 @@ class CRUDHelper:
             inst = self.model.objects.filter(self.filter_callback(request)).get(**{self.pk_field: kwargs[self.pk_field]})
         for f in self.fields:
             if f in kwargs:
-                setattr(inst, f, kwargs[f])
+                self.set_property(inst, f, kwargs[f])
         inst.save()
         return inst
 
@@ -71,6 +92,7 @@ def create_crud(
         model=None,
         fields=None,
         pk_field='pk',
+        fk_field_map={'_default': 'pk'},
         filter_callback=None,
         add_callback=None,
 
@@ -78,7 +100,7 @@ def create_crud(
         namespace='',
         api_names=('add', 'update', 'delete', 'list', 'get'),
     ):
-    helper = CRUDHelper(model, fields, pk_field, filter_callback, add_callback)
+    helper = CRUDHelper(model, fields, pk_field, fk_field_map, filter_callback, add_callback)
     api.provider.register(
             version=version,
             namespace=namespace,
