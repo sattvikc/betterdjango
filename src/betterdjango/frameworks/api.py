@@ -112,6 +112,7 @@ class APIProvider:
                     default=default_provider(request), sort_keys=True),
                     content_type='application/json')
 
+            _inner2._http_methods = http_methods
             self.REGISTERED_APIS[version][namespace][api_name] = _inner2
             return _inner2
         return _inner1

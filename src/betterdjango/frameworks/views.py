@@ -36,14 +36,16 @@ class ViewProvider:
             except Exception as e:
                 logger.debug(str(e))
 
-    def register(self, urlpattern, template_name=None):
+    def register(self, urlpattern, template_name=None, content_type=None):
         def _inner1(method):
             self.VIEWS.append((urlpattern, template_name))
 
             def _inner2(request, *args, **kwargs):
                 result = method(request, *args, **kwargs)
                 if isinstance(result, dict):
-                    return render(request, template_name, result)
+                    result = render(request, template_name, result)
+                if not content_type is None:
+                    result['Content-Type'] = content_type
                 return result
 
             self.URLS.append((urlpattern, _inner2))
